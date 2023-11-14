@@ -17,7 +17,7 @@ from sknetwork.utils import membership_matrix
 from sknetwork.hierarchy import Ward, cut_straight
 from sknetwork.clustering import Louvain, KMeans, PropagationClustering
 from geomloss import SamplesLoss
-import pysbm
+#import pysbm
 
 
 def load_t_files(args, T_file, logger, adj_train):
