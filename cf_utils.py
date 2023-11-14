@@ -64,7 +64,7 @@ def get_t(adj_mat, method, k, selfloop=False):
     return T
 
 def SBM(adj, k):
-    nx_g = nx.from_scipy_sparse_matrix(adj)
+    nx_g = nx.from_scipy_sparse_array(adj)
     standard_partition = pysbm.NxPartition(graph=nx_g, number_of_blocks=k)
     rep = standard_partition.get_representation()
     labels = np.asarray([v for k, v in sorted(rep.items(), key=lambda item: item[0])])
@@ -145,7 +145,7 @@ def spectral_clustering(adj, k):
     return T
 
 def kcore(adj):
-    G = nx.from_scipy_sparse_matrix(adj)
+    G = nx.from_scipy_sparse_array(adj)
     G.remove_edges_from(nx.selfloop_edges(G))
     labels = np.array(list(nx.algorithms.core.core_number(G).values()))-1
     mem_mat = membership_matrix(labels)
