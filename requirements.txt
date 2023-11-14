@@ -4,7 +4,7 @@ matplotlib==3.3.1
 scikit_network==0.20.0
 numpy==1.24.4
 six==1.16.0
-torch_sparse==0.6.18+pt21cu121
+torch_sparse
 networkx==3.1
 dgl==1.1.2
 scipy==1.10.1
