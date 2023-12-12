@@ -210,7 +210,6 @@ def get_CF(adj, node_embs, T_f, dist='euclidean', thresh=50, n_workers=20):
 def get_CF_single(params):
     """ single process for getting CF edges """
     adj, simi_mat, node_nns, T_f, thresh, node_pairs, verbose = params
-
     T_cf = np.zeros(adj.shape)
     adj_cf = np.zeros(adj.shape)
     edges_cf_t0 = []

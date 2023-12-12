@@ -9,6 +9,7 @@ import scipy.sparse as sp
 from copy import deepcopy
 from datetime import datetime
 from matplotlib import pyplot as plt
+from torch_geometric.utils import to_scipy_sparse_matrix
 import torch
 import torch.nn.functional as F
 from sklearn.metrics import roc_auc_score, average_precision_score
@@ -68,22 +69,22 @@ def load_data(args, logger):
     path = args.datapath
     ds = args.dataset
     if ds.startswith('ogbl'):
-        dataset = DglLinkPropPredDataset(name=ds, root=args.datapath)
+        dataset = PygLinkPropPredDataset(name=ds, root=args.datapath)
         graph = dataset[0]
-        adj_train = graph.adjacency_matrix(scipy_fmt='csr')
-        g = nx.from_scipy_sparse_matrix(adj_train)
+        adj_train = to_scipy_sparse_matrix(edge_index=graph["edge_index"]).tocsr()
+        g = nx.from_scipy_sparse_array(adj_train)
         print('density',nx.density(g))
         print('edges:', len(g.edges()) )
         print('nodes:', len(g.nodes()) )
         adj_train.setdiag(1)
-        if 'feat' in graph.ndata:
+        if 'feat' in graph.keys():
             features = graph.ndata['feat']
             dim_feat = features.shape[-1]
         else:
             # construct one-hot degree features
             degrees = torch.LongTensor(adj_train.sum(0) - 1)
             indices = torch.cat((torch.arange(adj_train.shape[0]).unsqueeze(0), degrees), dim=0)
-            features = torch.sparse.FloatTensor(indices, torch.ones(adj_train.shape[0])).to_dense().numpy()
+            features = torch.sparse_coo_tensor(indices, torch.ones(adj_train.shape[0])).to_dense().numpy()
             features = torch.Tensor(features)
         # using adj_train as adj_label as training loss is only calculated with train_pairs (excluding val/test edges and no_edges)
         adj_label = copy.deepcopy(adj_train)
@@ -394,7 +395,7 @@ def scipysp_to_pytorchsp(sp_mx):
     coords = np.vstack((sp_mx.row, sp_mx.col)).transpose()
     values = sp_mx.data
     shape = sp_mx.shape
-    pyt_sp_mx = torch.sparse.FloatTensor(torch.LongTensor(coords.T),
+    pyt_sp_mx = torch.sparse_coo_tensor(torch.LongTensor(coords.T),
                                          torch.FloatTensor(values),
                                          torch.Size(shape))
     return pyt_sp_mx

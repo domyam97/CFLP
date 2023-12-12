@@ -7,4 +7,5 @@
 logs/
 data/train_split/
 data/ogbl_ddi/
+data/ogbl_collab/
 data/T_files/*.pkl
