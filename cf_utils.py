@@ -29,7 +29,7 @@ def load_t_files(args, T_file, logger, adj_train):
         logger.info(f'loaded cached T files: {args.t} {args.k}')
     else:
         T_f = get_t(adj_train, args.t, args.k, args.selfloopT)
-        T_cf, adj_cf, edges_cf_t0, edges_cf_t1 = get_CF(adj_train, node_embs_raw, T_f, args.dist, args.gamma, args.n_workers)
+        T_cf, adj_cf, edges_cf_t0, edges_cf_t1 = get_CF(adj_train, node_embs_raw, T_f, args.dist, args.gamma, args.cutoff, args.n_workers)
         T_cf = sp.csr_matrix(T_cf)
         adj_cf = sp.csr_matrix(adj_cf)
         pickle.dump((T_f, T_cf, adj_cf, edges_cf_t0, edges_cf_t1), open(T_file, 'wb'))
@@ -180,7 +180,7 @@ def calc_disc(disc_func, z, nodepairs_f, nodepairs_cf):
         raise Exception('unsupported distance function for discrepancy loss')
     return loss_disc
 
-def get_CF(adj, node_embs, T_f, dist='euclidean', thresh=50, n_workers=20):
+def get_CF(adj, node_embs, T_f, dist='euclidean', thresh=50, sample_size = 20, n_workers=20):
     if dist == 'cosine':
         # cosine similarity (flipped to use as a distance measure)
         embs = normalize(node_embs, norm='l1', axis=1)
@@ -196,10 +196,11 @@ def get_CF(adj, node_embs, T_f, dist='euclidean', thresh=50, n_workers=20):
     node_nns = np.argsort(simi_mat, axis=1)
     # find nearest CF node-pair for each node-pair
     node_pairs = list(combinations(range(adj.shape[0]), 2))
+    n_samples = sample_size*node_nns.shape[0]/100
     print('This step may be slow, please adjust args.n_workers according to your machine')
     pool = Pool(n_workers)
     batches = np.array_split(node_pairs, n_workers)
-    results = pool.map(get_CF_single, [(adj, simi_mat, node_nns, T_f, thresh, np_batch, True) for np_batch in batches])
+    results = pool.map(get_CF_single, [(adj, simi_mat, node_nns, T_f, thresh, n_samples, np_batch, True) for np_batch in batches])
     results = list(zip(*results))
     T_cf = np.add.reduce(results[0])
     adj_cf = np.add.reduce(results[1])
@@ -209,7 +210,7 @@ def get_CF(adj, node_embs, T_f, dist='euclidean', thresh=50, n_workers=20):
 
 def get_CF_single(params):
     """ single process for getting CF edges """
-    adj, simi_mat, node_nns, T_f, thresh, node_pairs, verbose = params
+    adj, simi_mat, node_nns, T_f, thresh, n_samples, node_pairs, verbose = params
     T_cf = np.zeros(adj.shape)
     adj_cf = np.zeros(adj.shape)
     edges_cf_t0 = []
@@ -221,6 +222,10 @@ def get_CF_single(params):
         nns_b = node_nns[b]
         i, j = 0, 0
         while i < len(nns_a)-1 and j < len(nns_b)-1:
+            if i+j >= 2*n_samples:
+                T_cf[a, b] = T_f[a, b]
+                adj_cf[a, b] = adj[a, b]
+                break
             if simi_mat[a, nns_a[i]] + simi_mat[b, nns_b[j]] > 2 * thresh:
                 T_cf[a, b] = T_f[a, b]
                 adj_cf[a, b] = adj[a, b]

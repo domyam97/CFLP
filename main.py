@@ -32,6 +32,7 @@ def get_args():
     parser.add_argument('--alpha', type=float, default=1, help='weight of cf loss')
     parser.add_argument('--beta', type=float, default=1, help='weight of discrepancy loss')
     parser.add_argument('--gamma', type=float, default=30.0, help='maximum distance thresold for finding nearest neighbors')
+    parser.add_argument('--cutoff', type=float, default=20.0, help='the top percentage of node neighbors to search for counterfactual pairs')
     parser.add_argument('--neg_rate', type=int, default=1, help='rate of negative samples during training')
     parser.add_argument('--dec', type=str, default='hadamard', choices=['innerproduct','hadamard','mlp'], help='choice of decoder')
     parser.add_argument('--seed', type=int, default=-1, help='fix random seed if needed')
@@ -80,8 +81,10 @@ def train(args, logger):
     T_file_path = f'{args.datapath}T_files/'
     if not os.path.exists(T_file_path):
         os.makedirs(T_file_path, exist_ok=True)
+    t_start = time.time()
     T_file = f'{T_file_path}{args.dataset}_{args.t}{args.k}-{args.dist}{args.gamma}-{args.embraw}.pkl'
     T_f, edges_cf_t1, edges_cf_t0, T_cf, adj_cf = load_t_files(args, T_file, logger, adj_train)
+    print("Time to find CF pairs:", time.time()-t_start)
 
     # get the factual node pairs
     edges_f_t1 = np.asarray((sp.triu(T_f, 1) > 0).nonzero()).T
