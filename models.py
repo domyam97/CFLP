@@ -3,7 +3,11 @@ import scipy.sparse as sp
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch_geometric
+from torch_geometric.nn.conv import MessagePassing
+from torch_geometric.utils import to_edge_index
 from torch_geometric.nn import GCNConv, SAGEConv, JumpingKnowledge
+from torch_scatter import scatter
 
 
 class CFLP(nn.Module):
@@ -30,9 +34,66 @@ class CFLP(nn.Module):
         self.encoder.reset_parameters()
         self.decoder.reset_parameters()
 
+class GAT(MessagePassing):
+    def __init__(self, dim_feat, dim_h, dropout = 0.2, heads = 2):
+        super(GAT, self).__init__(node_dim = 0)
+        self.in_channels = dim_feat
+        self.out_channels = dim_h
+        self.dropout = dropout
+        self.heads = heads
+
+        self.lin_l = nn.Linear(self.in_channels, self.heads * self.out_channels)
+        self.lin_r = nn.Linear(self.in_channels, self.heads * self.out_channels)
+        self.att_l = nn.Parameter(torch.ones(self.out_channels, self.heads).T)
+        self.att_r = nn.Parameter(torch.ones(self.out_channels, self.heads).T)
+
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        nn.init.xavier_uniform_(self.lin_l.weight)
+        nn.init.xavier_uniform_(self.lin_r.weight)
+        nn.init.xavier_uniform_(self.att_l)
+        nn.init.xavier_uniform_(self.att_r)
+
+    def forward(self, features, adj,  size =None):
+        H, C = self.heads, self.out_channels
+        rows, columns, edge_attribute = adj.t().coo()
+        edge_index = torch.stack([rows, columns], dim = 0)
+
+        # print(edge_index.shape)
+        # print("here")
+        x = features
+        linear_l = self.lin_l(features).reshape(features.shape[0], H, C)
+        linear_r = self.lin_r(features).reshape(features.shape[0], H, C)
+        # print(self.att_l.shape)
+        # print(self.linear_l.shape)
+        # print("here")
+        # print(linear_l.shape)
+        # print(self.att_l.shape)
+        alpha_l = self.att_l * linear_l
+        alpha_r = self.att_r * linear_r
+        result = self.propagate(edge_index, x= x, size = size, alpha = (alpha_l, alpha_r))
+        
+        return result
+
+    def message(self, x_j, alpha_j, alpha_i, index, size_i ):
+        value = torch_geometric.utils.softmax(F.leaky_relu(alpha_i + alpha_j), index, num_nodes = size_i)
+        prob_after_drop = nn.Dropout(self.dropout)
+        new_alpha_value = prob_after_drop(value)
+
+        linearlayer = self.lin_r(x_j).reshape(new_alpha_value.shape)
+        result = new_alpha_value * linearlayer
+        return result
+
+    def aggregate(self, inputs, index, dim_size = None):
+        out = scatter(inputs, index, dim_size = dim_size, dim = 0, reduce = "sum")
+
+        return out
+
+
 
 class GNN(nn.Module):
-    def __init__(self, dim_feat, dim_h, dim_z, dropout, gnn_type='GCN', num_layers=3, jk_mode='mean', batchnorm=True):
+    def __init__(self, dim_feat, dim_h, dim_z, dropout, gnn_type='GCN', num_layers=3, jk_mode='mean', batchnorm=False):
         super(GNN, self).__init__()
 
         assert jk_mode in ['max','sum','mean','lstm','cat','none']
@@ -44,6 +105,8 @@ class GNN(nn.Module):
             gnnlayer = SAGEConv
         elif gnn_type == 'GCN':
             gnnlayer = GCNConv
+        elif gnn_type == 'GAT':
+            gnnlayer = GAT
         self.convs = torch.nn.ModuleList()
         self.convs.append(gnnlayer(dim_feat, dim_h))
         for _ in range(num_layers - 2):
@@ -66,6 +129,8 @@ class GNN(nn.Module):
 
         for i in range(len(self.convs)):
             out = self.convs[i](out, adj)
+            print("here")
+            print(out.shape)
             if self.batchnorm:
                  out = self.bns[i](out)
             out = self.act(out)
