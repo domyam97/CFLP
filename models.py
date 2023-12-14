@@ -35,10 +35,10 @@ class CFLP(nn.Module):
         self.decoder.reset_parameters()
 
 class GAT(MessagePassing):
-    def __init__(self, dim_feat, dim_h, dropout = 0.2, heads = 2):
+    def __init__(self, dim_in, dim_out, dropout = 0.2, heads = 2):
         super(GAT, self).__init__(node_dim = 0)
-        self.in_channels = dim_feat
-        self.out_channels = dim_h
+        self.in_channels = dim_in
+        self.out_channels = dim_out
         self.dropout = dropout
         self.heads = heads
 
@@ -60,19 +60,13 @@ class GAT(MessagePassing):
         rows, columns, edge_attribute = adj.t().coo()
         edge_index = torch.stack([rows, columns], dim = 0)
 
-        # print(edge_index.shape)
-        # print("here")
         x = features
         linear_l = self.lin_l(features).reshape(features.shape[0], H, C)
         linear_r = self.lin_r(features).reshape(features.shape[0], H, C)
-        # print(self.att_l.shape)
-        # print(self.linear_l.shape)
-        # print("here")
-        # print(linear_l.shape)
-        # print(self.att_l.shape)
         alpha_l = self.att_l * linear_l
         alpha_r = self.att_r * linear_r
         result = self.propagate(edge_index, x= x, size = size, alpha = (alpha_l, alpha_r))
+        result = result.reshape(result.shape[0], H * C)
         
         return result
 
@@ -93,29 +87,31 @@ class GAT(MessagePassing):
 
 
 class GNN(nn.Module):
-    def __init__(self, dim_feat, dim_h, dim_z, dropout, gnn_type='GCN', num_layers=3, jk_mode='mean', batchnorm=False):
+    def __init__(self, dim_feat, dim_h, dim_z, dropout, gnn_type='GCN', num_layers=3, num_heads=1, jk_mode='mean', batchnorm= True):
         super(GNN, self).__init__()
 
         assert jk_mode in ['max','sum','mean','lstm','cat','none']
         self.act = nn.ELU()
         self.dropout = dropout
-        self.linear = torch.nn.Linear(dim_h, dim_z)
-
+        
         if gnn_type == 'SAGE':
             gnnlayer = SAGEConv
         elif gnn_type == 'GCN':
             gnnlayer = GCNConv
         elif gnn_type == 'GAT':
             gnnlayer = GAT
+            dim_h_mh = dim_h*num_heads
+        self.linear = torch.nn.Linear(dim_h_mh, dim_z)
         self.convs = torch.nn.ModuleList()
-        self.convs.append(gnnlayer(dim_feat, dim_h))
+        self.convs.append(gnnlayer(dim_feat, dim_h, heads=num_heads))
         for _ in range(num_layers - 2):
-            self.convs.append(gnnlayer(dim_h, dim_h))
-        self.convs.append(gnnlayer(dim_h, dim_z))
+            self.convs.append(gnnlayer(dim_h_mh, dim_h, heads = num_heads))
+        self.convs.append(gnnlayer(dim_h_mh, dim_z, heads=1))
 
         self.batchnorm = batchnorm
         if self.batchnorm:
-            self.bns = torch.nn.ModuleList([torch.nn.BatchNorm1d(dim_h) for _ in range(num_layers)])
+            self.bns = torch.nn.ModuleList([torch.nn.BatchNorm1d(dim_h_mh) for _ in range(num_layers-1)])
+            self.bns.append(torch.nn.BatchNorm1d(dim_z))
 
         self.jk_mode = jk_mode
         if self.jk_mode in ['max', 'lstm', 'cat']:
@@ -129,8 +125,6 @@ class GNN(nn.Module):
 
         for i in range(len(self.convs)):
             out = self.convs[i](out, adj)
-            print("here")
-            print(out.shape)
             if self.batchnorm:
                  out = self.bns[i](out)
             out = self.act(out)
@@ -149,6 +143,7 @@ class GNN(nn.Module):
             out = torch.sum(out_stack, dim=0)
         elif self.jk_mode == 'none':
             out = out_list[-1]
+
         return out
 
     def reset_parameters(self):
