@@ -81,14 +81,22 @@ def ward_hierarchy(adj, k):
     return T
 
 def jaccard_index(adj, k):
-    adj = adj.astype(int)
-    intrsct = adj.dot(adj.T)
-    row_sums = intrsct.diagonal()
-    unions = row_sums[:,None] + row_sums - intrsct
-    sim_matrix = intrsct / unions
-    thre = np.percentile(sim_matrix, (100-10*k))
-    thre = thre.maximum(np.percentile(sim_matrix, 0.5))
-    thre = thre.minimum(np.percentile(sim_matrix, 0.8))
+    nx_g = nx.from_scipy_sparse_array(adj)
+    preds = nx.jaccard_coefficient(nx_g)
+    sim_matrix_dat = []
+    sim_matrix_col = []
+    sim_matrix_row = []
+    for u,v,j in preds:
+        if j != 0.0:
+            sim_matrix_row.append(u)
+            sim_matrix_col.append(v)
+            sim_matrix_dat.append(j)
+    sim_matrix = sp.coo_matrix((np.array(sim_matrix_dat),
+                               (np.array(sim_matrix_row), np.array(sim_matrix_col))),
+                               (adj.shape))
+    thre = np.percentile(np.array(sim_matrix_dat),(100-10*k))
+    thre = max([np.percentile(np.array(sim_matrix_dat),0.5),thre])
+    thre = min([np.percentile(np.array(sim_matrix_dat), 0.8),thre])
     T = np.asarray((sim_matrix >= thre).astype(int)).item()
     T = T - np.diag(T.diagonal())
     return sp.csr_matrix(T)
@@ -157,6 +165,7 @@ def sample_nodepairs(num_np, edges_f_t1, edges_f_t0, edges_cf_t1, edges_cf_t0):
     nodepairs_f = np.concatenate((edges_f_t1, edges_f_t0), axis=0)
     f_idx = np.random.choice(len(nodepairs_f), min(num_np,len(nodepairs_f)), replace=False)
     np_f = nodepairs_f[f_idx]
+    breakpoint()
     nodepairs_cf = np.concatenate((edges_cf_t1, edges_cf_t0), axis=0)
     cf_idx = np.random.choice(len(nodepairs_cf), min(num_np,len(nodepairs_f)), replace=False)
     np_cf = nodepairs_cf[cf_idx]
