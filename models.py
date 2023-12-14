@@ -35,17 +35,16 @@ class CFLP(nn.Module):
         self.decoder.reset_parameters()
 
 class GAT(MessagePassing):
-    def __init__(self, dim_in, dim_out, dropout = 0.2, heads = 2):
+    def __init__(self, dim_in, dim_out, dropout = 0.2):
         super(GAT, self).__init__(node_dim = 0)
         self.in_channels = dim_in
         self.out_channels = dim_out
         self.dropout = dropout
-        self.heads = heads
 
-        self.lin_l = nn.Linear(self.in_channels, self.heads * self.out_channels)
-        self.lin_r = nn.Linear(self.in_channels, self.heads * self.out_channels)
-        self.att_l = nn.Parameter(torch.ones(self.out_channels, self.heads).T)
-        self.att_r = nn.Parameter(torch.ones(self.out_channels, self.heads).T)
+        self.lin_l = nn.Linear(self.in_channels, self.out_channels)
+        self.lin_r = nn.Linear(self.in_channels, self.out_channels)
+        self.att_l = nn.Parameter(torch.ones(self.out_channels, 1).T)
+        self.att_r = nn.Parameter(torch.ones(self.out_channels, 1).T)
 
         self.reset_parameters()
 
@@ -56,17 +55,17 @@ class GAT(MessagePassing):
         nn.init.xavier_uniform_(self.att_r)
 
     def forward(self, features, adj,  size =None):
-        H, C = self.heads, self.out_channels
+        C =  self.out_channels
         rows, columns, edge_attribute = adj.t().coo()
         edge_index = torch.stack([rows, columns], dim = 0)
 
         x = features
-        linear_l = self.lin_l(features).reshape(features.shape[0], H, C)
-        linear_r = self.lin_r(features).reshape(features.shape[0], H, C)
+        linear_l = self.lin_l(features).reshape(features.shape[0], C)
+        linear_r = self.lin_r(features).reshape(features.shape[0], C)
         alpha_l = self.att_l * linear_l
         alpha_r = self.att_r * linear_r
         result = self.propagate(edge_index, x= x, size = size, alpha = (alpha_l, alpha_r))
-        result = result.reshape(result.shape[0], H * C)
+        result = result.reshape(result.shape[0], C)
         
         return result
 
@@ -87,7 +86,7 @@ class GAT(MessagePassing):
 
 
 class GNN(nn.Module):
-    def __init__(self, dim_feat, dim_h, dim_z, dropout, gnn_type='GCN', num_layers=3, num_heads=1, jk_mode='mean', batchnorm= True):
+    def __init__(self, dim_feat, dim_h, dim_z, dropout, gnn_type='GCN', num_layers=3, jk_mode='mean', batchnorm= True):
         super(GNN, self).__init__()
 
         assert jk_mode in ['max','sum','mean','lstm','cat','none']
@@ -100,17 +99,16 @@ class GNN(nn.Module):
             gnnlayer = GCNConv
         elif gnn_type == 'GAT':
             gnnlayer = GAT
-            dim_h_mh = dim_h*num_heads
-        self.linear = torch.nn.Linear(dim_h_mh, dim_z)
+        self.linear = torch.nn.Linear(dim_h, dim_z)
         self.convs = torch.nn.ModuleList()
-        self.convs.append(gnnlayer(dim_feat, dim_h, heads=num_heads))
+        self.convs.append(gnnlayer(dim_feat, dim_h))
         for _ in range(num_layers - 2):
-            self.convs.append(gnnlayer(dim_h_mh, dim_h, heads = num_heads))
-        self.convs.append(gnnlayer(dim_h_mh, dim_z, heads=1))
+            self.convs.append(gnnlayer(dim_h, dim_h))
+        self.convs.append(gnnlayer(dim_h, dim_z, heads=1))
 
         self.batchnorm = batchnorm
         if self.batchnorm:
-            self.bns = torch.nn.ModuleList([torch.nn.BatchNorm1d(dim_h_mh) for _ in range(num_layers-1)])
+            self.bns = torch.nn.ModuleList([torch.nn.BatchNorm1d(dim_h) for _ in range(num_layers-1)])
             self.bns.append(torch.nn.BatchNorm1d(dim_z))
 
         self.jk_mode = jk_mode
