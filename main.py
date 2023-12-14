@@ -40,7 +40,7 @@ def get_args():
     parser.add_argument('--trails', type=int, default=1)
     parser.add_argument('--gpu', type=int, default=-1, help='-2 for CPU, -1 for default GPU, >=0 for specific GPU')
     parser.add_argument('--n_workers', type=int, default=20, help='number of CPU processes for finding counterfactual links in the first run')
-    parser.add_argument('--gnn_type', type=str, default='GCN',choices=['SAGE','GCN'])
+    parser.add_argument('--gnn_type', type=str, default='GAT',choices=['SAGE','GCN'])
     parser.add_argument('--jk_mode', type=str, default='mean',choices=['max','cat','mean','lstm','sum','none'])
     parser.add_argument('--dim_h', type=int, default=256)
     parser.add_argument('--dim_z', type=int, default=256)
