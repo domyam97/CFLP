@@ -87,9 +87,9 @@ def jaccard_index(adj, k):
     unions = row_sums[:,None] + row_sums - intrsct
     sim_matrix = intrsct / unions
     thre = np.percentile(sim_matrix, (100-10*k))
-    thre = max(thre, np.percentile(sim_matrix, 0.5))
-    thre = min(thre, np.percentile(sim_matrix, 0.8))
-    T = np.asarray((sim_matrix >= thre).astype(int))
+    thre = thre.maximum(np.percentile(sim_matrix, 0.5))
+    thre = thre.minimum(np.percentile(sim_matrix, 0.8))
+    T = np.asarray((sim_matrix >= thre).astype(int)).item()
     T = T - np.diag(T.diagonal())
     return sp.csr_matrix(T)
 
