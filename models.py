@@ -104,7 +104,7 @@ class GNN(nn.Module):
         self.convs.append(gnnlayer(dim_feat, dim_h))
         for _ in range(num_layers - 2):
             self.convs.append(gnnlayer(dim_h, dim_h))
-        self.convs.append(gnnlayer(dim_h, dim_z, heads=1))
+        self.convs.append(gnnlayer(dim_h, dim_z))
 
         self.batchnorm = batchnorm
         if self.batchnorm:
