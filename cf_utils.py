@@ -165,7 +165,6 @@ def sample_nodepairs(num_np, edges_f_t1, edges_f_t0, edges_cf_t1, edges_cf_t0):
     nodepairs_f = np.concatenate((edges_f_t1, edges_f_t0), axis=0)
     f_idx = np.random.choice(len(nodepairs_f), min(num_np,len(nodepairs_f)), replace=False)
     np_f = nodepairs_f[f_idx]
-    breakpoint()
     nodepairs_cf = np.concatenate((edges_cf_t1, edges_cf_t0), axis=0)
     cf_idx = np.random.choice(len(nodepairs_cf), min(num_np,len(nodepairs_f)), replace=False)
     np_cf = nodepairs_cf[cf_idx]
